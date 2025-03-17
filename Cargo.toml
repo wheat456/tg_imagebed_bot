@@ -1,0 +1,15 @@
+[package]
+name = "imagebed_bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dotenv = "0.15.0"
+tokio = {version = "1.44.1",features = ["full"]}
+teloxide={version = "0.13.0",features = ["full"]}
+serde = {version = "1.0.188",features = ["derive"]}
+axum={version = "0.8.1",features = ["tokio","macros"]}
+base64="0.22.1"
+tokio-util={version = "0.7.14",features = ["io"]}
+openssl={version = "0.10.71",features = ["vendored"]}
+

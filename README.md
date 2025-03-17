@@ -3,11 +3,11 @@
 ```
 BOT_API="你的bot token"
 KEY="dsadsa" #自定义密钥，随便一个字符串
-DOMAIN="127.0.0.1:8080" # 域名比如 www.google.com
+DOMAIN="127.0.0.1:8080" # 你的域名比如 www.google.com
 ```
 2. 运行
-```curl -LO https://github.com/wheat456/tg_imagebed_bot/releases/download/0.0.2/imagebed_bot_v0.0.2 && chmod +x imagebed_bot_v0.0.2 && nohup ./imagebed_bot_v0.0.2 &
-&
+```
+curl -LO https://github.com/wheat456/tg_imagebed_bot/releases/download/0.0.2/imagebed_bot_v0.0.2 && chmod +x imagebed_bot_v0.0.2 && nohup ./imagebed_bot_v0.0.2 &
 ```
 
 # attention

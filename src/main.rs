@@ -4,11 +4,11 @@ use std::env;
 use std::sync::LazyLock;
 use base64::Engine;
 use teloxide::dispatching::dialogue::{SqliteStorage,serializer:: Json,ErasedStorage,Storage};
-use teloxide::dispatching::{HandlerExt, MessageFilterExt};
+use teloxide::dispatching::{dialogue, HandlerExt, MessageFilterExt};
 use teloxide::net::Download;
-use teloxide::types::BotCommand;
+use teloxide::types::{BotCommand,InlineKeyboardButton, InlineKeyboardMarkup,ParseMode};
 use teloxide::prelude::*;
-use teloxide::utils::command::BotCommands;
+use teloxide::utils::{command::BotCommands,markdown};
 use std::time::{SystemTime,UNIX_EPOCH};
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 type MyDialogue = Dialogue<State,ErasedStorage<State>>;
@@ -42,9 +42,10 @@ async fn main()->Result<(),Error> {
         // let conn=Connection::open("member.db")?;
         // conn.execute("create table if not exists member(id INTEGER PRIMARY KEY,user integer UNIQUE)", [])?;
     }
+    let delete_button=vec![InlineKeyboardButton::callback("delete", "delete_file")];
+
     let storage:MyStorage=SqliteStorage::open("db.sqlite", Json).await?.erase();
-    let schema=Update::filter_message()
-        .enter_dialogue::<Message,ErasedStorage<State>,State>()
+    let message_handler=Update::filter_message()
         .branch(dptree::case![State::Start]
             .branch(dptree::entry().filter_command::<MyCommands>()
                     .branch(dptree::case![MyCommands::Login].endpoint(user_login))
@@ -60,13 +61,15 @@ async fn main()->Result<(),Error> {
                     .branch(dptree::case![MyCommands::Exit].endpoint(exit_login)))
             .branch(Message::filter_photo().endpoint(photo_download))
             .branch(Message::filter_document().endpoint(file_download))
-            
         );
-
+    let callback_query_handler=Update::filter_callback_query()
+        .branch(dptree::case![State::Logined].endpoint(callback_query_handle));
+    let schema=dialogue::enter::<Update,ErasedStorage<State>,State,_>()
+        .branch(message_handler)
+        .branch(callback_query_handler);
     let tg_bot=tokio::spawn(
         async move{
-            Dispatcher::builder(bot, schema).dependencies(dptree::deps![storage]).build().dispatch().await;
-
+            Dispatcher::builder(bot, schema).dependencies(dptree::deps![storage,delete_button]).build().dispatch().await;
         }
     
     );
@@ -84,6 +87,20 @@ enum State {
     Logined
 
 }
+
+async fn  callback_query_handle(bot:Bot,q:CallbackQuery)->Result<(),Error> {
+    bot.answer_callback_query(q.id).await?;
+    let msg=q.message.unwrap().clone();
+    let text=msg.regular_message().unwrap().text().unwrap();
+    // println!("{text}");
+    bot.edit_message_text(q.from.id, msg.id(),
+        markdown::strike(text.replace(":", "\\:").replace("/", "\\/").replace("=", "\\=").replace(".", "\\.").as_str())).parse_mode(ParseMode::MarkdownV2).await?;
+    let path=String::from_utf8(web_server::URL_SAFE.decode(text.split("/").last().unwrap()).unwrap()).unwrap();
+    // println!("{path}");
+    tokio::fs::remove_file(path).await?;
+    Result::Ok(())
+}
+
 
 async fn exit_login(bot:Bot,msg:Message,dialogue:MyDialogue)->Result<(),Error> {
     create_or_delete_dir(msg.chat.id,0).await?;
@@ -142,7 +159,7 @@ async fn handle_msg(bot:Bot,msg:Message)->Result<(),Error>{
 
 
 
-async fn photo_download(bot:Bot,msg:Message)->Result<(),Error> {
+async fn photo_download(bot:Bot,msg:Message,button:Vec<InlineKeyboardButton>)->Result<(),Error> {
     // print!("收到图片");
     // bot.send_message(msg.chat.id, "text").await?;
     match msg.photo() {
@@ -157,15 +174,14 @@ async fn photo_download(bot:Bot,msg:Message)->Result<(),Error> {
             bot.send_message(msg.chat.id, format!("{}/{}",
                 &*DOMAIN,
                 web_server::URL_SAFE.encode(format!("img/{}/{}.bmp",msg.chat.id,img_name))
-                )).await?;
-
+                )).reply_markup(InlineKeyboardMarkup::new([button])).await?;
         }
     }
-    bot.send_message(msg.chat.id, "下载成功").await?;
+    // bot.send_message(msg.chat.id, "下载成功").await?;
     Result::Ok(())
 }
 
-async fn file_download(bot:Bot,msg:Message)->Result<(),Error> {
+async fn file_download(bot:Bot,msg:Message,button:Vec<InlineKeyboardButton>)->Result<(),Error> {
     match msg.document() {
         None=>{},
         Some(doc)=>{
@@ -180,10 +196,9 @@ async fn file_download(bot:Bot,msg:Message)->Result<(),Error> {
             &*DOMAIN,
             web_server::URL_SAFE.encode(format!("img/{}/{}.{}",
            msg.chat.id,file_name,suffix_name))
-            )).await?;
+            )).reply_markup(InlineKeyboardMarkup::new([button])).await?;
         }
     }
-    bot.send_message(msg.chat.id, "下载成功").await?;
     Result::Ok(())
 }
 
